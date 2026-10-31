@@ -1,5 +1,5 @@
 """Sec. 4 backtest: RL-BHRP vs BHRP vs equal-weight sector-ETF benchmark, Table 2 metrics, weight diagnostics.
-uv run python run.py [--centering global|sector] [--seeds 10]"""
+uv run python run.py [--actor flat|shared] [--centering global|sector] [--seeds 10]"""
 import argparse
 import json
 from multiprocessing import Pool
@@ -13,9 +13,9 @@ from data import TICKERS
 
 C = 5e-4          # 5 bps one-way (Sec. 4.2)
 ALPHA = 0.5       # within/across split; not reported in the paper
-LAMS = (1e5, 1e6, 1e7)
+LAMS = (1e5, 1e6, 1e7, 1e8)
 ITERS = (25, 50, 100, 200, 300)
-VAL_MONTHS = 24   # last 24 training decisions (2017-12 .. 2019-11) for calibration
+VAL_MONTHS = 24   # last 24 of the 59 training decisions (2017-12 .. 2019-11) for calibration
 
 PAPER = pd.DataFrame({  # Table 2
     "RL-BHRP": [1.199612, .151637, .157213, .173748, .904829, 1.648382, -.203308, .745850, .036883, .686752, .982509, .027636, -.074066, -.102409, .641791],
@@ -68,7 +68,7 @@ def diagnostics(W):
 def _tune(job):
     import torch, rl
     torch.set_num_threads(1)
-    P, (lam, seed, t0, t1, t2, centering) = panel.build(), job
+    P, (lam, seed, t0, t1, t2, centering, actor) = panel.build(), job
     kw = dict(c=C, lam=lam, alpha=ALPHA, centering=centering)
     out = {}
 
@@ -76,26 +76,27 @@ def _tune(job):
         if it in ITERS:
             r, _ = rl.evaluate(net, stats, P, t1, t2, kw)
             out[it] = metrics(r, P["bench"][t1:t2])["Sharpe"]
-    rl.train(P, t0, t1, seed=seed, env_kw=kw, iters=max(ITERS), on_iter=on_iter)
+    rl.train(P, t0, t1, seed=seed, env_kw=kw, actor=actor, iters=max(ITERS), on_iter=on_iter)
     return lam, seed, out
 
 
 def _final(job):
     import torch, rl
     torch.set_num_threads(1)
-    P, (lam, iters, seed, t1, t2, centering) = panel.build(), job
+    P, (lam, iters, seed, t1, t2, centering, actor) = panel.build(), job
     kw = dict(c=C, lam=lam, alpha=ALPHA, centering=centering)
-    net, m, s = rl.train(P, 0, t1, seed=seed, env_kw=kw, iters=iters)
+    net, m, s = rl.train(P, 0, t1, seed=seed, env_kw=kw, actor=actor, iters=iters)
     return rl.evaluate(net, (m, s), P, t2, len(P["dates"]), kw)
 
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--actor", default="flat", choices=["flat", "shared"])
     ap.add_argument("--centering", default="global", choices=["global", "sector"])
     ap.add_argument("--seeds", type=int, default=10)
     ap.add_argument("--tune-seeds", type=int, default=3)
     args = ap.parse_args()
-    out = Path("results") / args.centering
+    out = Path("results") / f"{args.actor}-{args.centering}"
     out.mkdir(parents=True, exist_ok=True)
 
     P = panel.build()
@@ -107,7 +108,8 @@ def main():
     ret_dates = pd.DatetimeIndex(P["ret_dates"][t_test:]).to_period("M").to_timestamp("M")
 
     with Pool(min(12, len(LAMS) * args.tune_seeds)) as pool:
-        tuned = pool.map(_tune, [(l, s, 0, t_val, t_train, args.centering) for l in LAMS for s in range(args.tune_seeds)])
+        tuned = pool.map(_tune, [(l, s, 0, t_val, t_train, args.centering, args.actor)
+                                 for l in LAMS for s in range(args.tune_seeds)])
     val = pd.DataFrame([{"lam": l, "seed": s, "iters": i, "val_sharpe": v} for l, s, o in tuned for i, v in o.items()])
     val_bhrp = metrics(hold(P, t_val, t_train, P["w_bhrp"][t_val:t_train]), P["bench"][t_val:t_train])["Sharpe"]
     grid = val.pivot_table(index="lam", columns="iters", values="val_sharpe", aggfunc="mean")
@@ -115,7 +117,8 @@ def main():
     print(f"validation Sharpe (mean of {args.tune_seeds} seeds; BHRP = {val_bhrp:.3f}):\n{grid.round(3)}\n-> lam={lam:g}, iters={iters}")
 
     with Pool(min(12, args.seeds)) as pool:
-        runs = pool.map(_final, [(lam, int(iters), s, t_train, t_test, args.centering) for s in range(args.seeds)])
+        runs = pool.map(_final, [(lam, int(iters), s, t_train, t_test, args.centering, args.actor)
+                                 for s in range(args.seeds)])
     R = np.array([r for r, _ in runs])
     Ws = np.array([w for _, w in runs])
     seed_m = pd.DataFrame([metrics(r, bench) for r in R])
@@ -129,7 +132,7 @@ def main():
         "paper RL-BHRP": PAPER["RL-BHRP"], "paper BHRP": PAPER["BHRP"], "paper Benchmark": PAPER["Benchmark"]}
     ).reindex(seed_m.columns)
     pd.set_option("display.width", 200)
-    print(f"\ntest {ret_dates[0].date()} .. {ret_dates[-1].date()} ({len(bench)} periods), centering={args.centering}\n")
+    print(f"\ntest {ret_dates[0].date()} .. {ret_dates[-1].date()} ({len(bench)} periods), actor={args.actor}, centering={args.centering}\n")
     print(table.round(4).to_string())
     beats = (seed_m["CAGR"] > table.loc["CAGR", "BHRP"]).sum()
     print(f"\nseeds beating BHRP on CAGR: {beats}/{len(R)}; on Sharpe: {(seed_m['Sharpe'] > table.loc['Sharpe', 'BHRP']).sum()}/{len(R)}")
@@ -142,7 +145,8 @@ def main():
     pd.DataFrame(np.c_[R.T, r_bhrp, bench], index=ret_dates,
                  columns=[f"rl_seed{s}" for s in range(len(R))] + ["bhrp", "benchmark"]).to_csv(out / "returns.csv")
     np.savez_compressed(out / "weights.npz", rl=Ws, bhrp=W_bhrp, dates=P["dates"][t_test:], tickers=TICKERS)
-    (out / "summary.json").write_text(json.dumps(dict(lam=lam, iters=int(iters), alpha=ALPHA, c=C, median_seed=med,
+    (out / "summary.json").write_text(json.dumps(dict(actor=args.actor, centering=args.centering, lam=lam,
+                                                      iters=int(iters), alpha=ALPHA, c=C, median_seed=med,
                                                       diagnostics=diag), indent=1, default=float))
 
 

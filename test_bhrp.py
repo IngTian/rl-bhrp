@@ -43,7 +43,7 @@ def test_two_level_fixed_point_is_risk_budgeting():  # Alg. 1 == RB with b_i = 1
     assert penalty(w[None], S, sec, 0.5, "global")[0] > 1e-12  # the paper's global P_N one does not
 
 
-def test_paper_literal_reciprocal_update_cycles():  # why bhrp() uses sqrt(eta/m), not 1/m
+def test_paper_literal_reciprocal_update_cycles():  # on a block-diagonal Sigma; why bhrp() damps with sqrt
     d = np.array([1.0, 4.0, 9.0])
     e = np.ones(3) / 3
     seen = []

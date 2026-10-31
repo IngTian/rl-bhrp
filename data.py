@@ -47,12 +47,13 @@ def month_ends(index):
 
 
 def tradable(raw_close, dollar_vol, adv_min=10e6, px_min=3.0):
-    """Def. 3.1.1: screened at each quarter-end, frozen for the following quarter. Returns daily bool mask."""
+    """Def. 3.1.1: screened at each quarter-end close, frozen for the following quarter (the decision taken at
+    that close is the first one held over the new quarter). Returns daily bool mask."""
     adv = dollar_vol[TICKERS].rolling(20).mean()
     ok = (adv >= adv_min) & (raw_close[TICKERS] >= px_min)
     qe = month_ends(ok.index)
     qe = qe[qe.month % 3 == 0]
-    return ok.loc[qe].reindex(ok.index).shift(1).ffill().fillna(False).astype(bool)
+    return ok.loc[qe].reindex(ok.index).ffill().fillna(False).astype(bool)
 
 
 if __name__ == "__main__":

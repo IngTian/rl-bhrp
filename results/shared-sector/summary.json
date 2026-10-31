@@ -1,0 +1,69 @@
+{
+ "actor": "shared",
+ "centering": "sector",
+ "lam": 1000000.0,
+ "iters": 300,
+ "alpha": 0.5,
+ "c": 0.0005,
+ "median_seed": 7,
+ "diagnostics": {
+  "RL-BHRP (median seed)": {
+   "top15": [
+    "XOM",
+    "CVX",
+    "PLD",
+    "LIN",
+    "SPG",
+    "APD",
+    "VZ",
+    "DUK",
+    "D",
+    "SO",
+    "AMZN",
+    "T",
+    "HD",
+    "LOW",
+    "MRK"
+   ],
+   "top15_share_mean": 0.4806196243268728,
+   "top15_share_median": 0.4827141892109523,
+   "top15_share_range": [
+    0.4339457752789564,
+    0.5069512255218886
+   ],
+   "turnover_mean": 0.14064484272886266,
+   "turnover_p95": 0.19185103047540839,
+   "cosine_mean": 0.9830278968623181,
+   "names_traded": 48
+  },
+  "BHRP": {
+   "top15": [
+    "LIN",
+    "XOM",
+    "APD",
+    "CVX",
+    "PLD",
+    "DUK",
+    "VZ",
+    "SO",
+    "D",
+    "SPG",
+    "T",
+    "PG",
+    "MRK",
+    "PEP",
+    "KO"
+   ],
+   "top15_share_mean": 0.5105664433205942,
+   "top15_share_median": 0.5018080494682563,
+   "top15_share_range": [
+    0.48225595497625684,
+    0.5736428585608323
+   ],
+   "turnover_mean": 0.013573251150697716,
+   "turnover_p95": 0.03214683895367093,
+   "cosine_mean": 0.9993255572174288,
+   "names_traded": 48
+  }
+ }
+}

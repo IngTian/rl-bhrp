@@ -1,0 +1,13 @@
+[project]
+name = "rl-bhrp"
+version = "0.1.0"
+description = "Reproduction of Kang & Tian (2025), RL-embedded Bayesian Hierarchical Risk Parity, arXiv:2508.11856"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy",
+    "pandas",
+    "yfinance",
+    "scikit-learn",
+    "torch",
+    "matplotlib",
+]

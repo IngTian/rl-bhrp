@@ -80,6 +80,10 @@ penalty is as written in Def. 3.2.3.
   0.873–0.904 and IR 0.49–0.68, while tracking error is lower than BHRP's. That is +1.2 pp CAGR and +0.045 Sharpe,
   against the paper's +1.8 pp and +0.059. The flat actor also improves on average (9/10 seeds on CAGR), but it is
   noisier: CAGR ranges 13.15–15.80% and TE 4.6–5.8%.
+- **The paper's RL-BHRP column is not reproduced exactly.** Unfortunately, the training seed of the original run was
+  lost, along with the RL settings the paper does not report (λ, α, iteration count, actor architecture). The
+  RL-BHRP numbers here are the best reproduction we obtained. They match the paper's direction and most of its size,
+  but not its exact values.
 - **Interpretation.** All seeds are evaluated on the same 67-month path. The consistency across seeds therefore shows
   robustness to training randomness, not statistical significance. An IR of 0.58 over 5.6 years is t ≈ 1.4; the
   paper's 0.687 is t ≈ 1.6.

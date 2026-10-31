@@ -1,4 +1,4 @@
-"""Figures 1-3 (Sec. 4) from results/<centering>/. uv run python plots.py [global|sector]"""
+"""Figures 1-3 (Sec. 4) from results/<run>/. uv run python plots.py flat-global"""
 import sys
 from pathlib import Path
 
@@ -31,8 +31,8 @@ def end_labels(ax, x, series, gap=11):
         ax.annotate(t, (x[-1], v), xytext=(8, q - p), textcoords="offset points", va="center", color=INK, fontsize=8)
 
 
-def main(centering="global"):
-    d = Path("results") / centering
+def main(run="flat-global"):
+    d = Path("results") / run
     ret = pd.read_csv(d / "returns.csv", index_col=0, parse_dates=True)
     med = pd.read_json(d / "summary.json", typ="series")["median_seed"]
     z = np.load(d / "weights.npz", allow_pickle=True)
@@ -47,7 +47,7 @@ def main(centering="global"):
     for y, lab, c in lines:
         ax.plot(x, y, color=c, lw=2, label=lab + (" (median seed)" if c == RL else ""))
     ax.set_ylabel("Cumulative wealth")
-    ax.set_title(f"Fig. 1 — test-period cumulative wealth (penalty centering: {centering})", loc="left", fontsize=10)
+    ax.set_title(f"Fig. 1 — test-period cumulative wealth (actor-centering: {run})", loc="left", fontsize=10)
     ax.legend(loc="upper left", fontsize=8)
     ax.set_xlim(x[0], x[-1] + pd.Timedelta(days=200))
     end_labels(ax, x, lines)

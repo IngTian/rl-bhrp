@@ -76,9 +76,10 @@ def risk_budget(S, b, tol=1e-12, max_iter=100):
 
 def bhrp(S, sec, tol=1e-10, max_iter=1000):
     """Alg. 1: two-level fixed point -> equal RC across sectors and within each sector.
-    Sector step is Alg. 2. Within-sector step uses eta <- sqrt(eta / m): the paper's literal
-    eta <- 1/m is a period-2 map (on a diagonal block it flips between uniform and 1/sigma^2
-    forever); the square root has the same fixed point and converges."""
+    Sector step is Alg. 2. Within-sector step uses eta <- sqrt(eta / m), same fixed point as the
+    paper's eta <- 1/m. The literal update is a period-2 map on block-diagonal Sigma (uniform <->
+    1/sigma^2); on real equity covariances the cross-sector terms dominate m and it converges to the
+    same weights, so the damping is a safeguard, not a correction."""
     N, G = len(sec), sec.max() + 1
     eta = np.zeros((N, G))
     eta[np.arange(N), sec] = 1

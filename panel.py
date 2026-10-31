@@ -8,7 +8,7 @@ import pandas as pd
 from bhrp import bhrp, posterior
 from data import ETFS, SECTOR_OF, TICKERS, load, month_ends, tradable
 
-WINDOW = 252      # rolling window W_t, trading days
+WINDOW = 756      # rolling window W_t, trading days; unstated in the paper, 756 reproduces its BHRP column
 LAGS = 3          # k lagged period returns in the state
 TAU2 = 0.001**2   # prior variance of a daily mean around its sector mean (Alg. 3, fixed exogenously)
 H = 21            # trading days per period: daily moments -> monthly

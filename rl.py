@@ -22,10 +22,10 @@ class Env:
         with np.errstate(divide="ignore"):
             self.psi0, self.phi0 = np.log(W), np.log(P["w_bhrp"] / W[:, SECTOR_OF])  # -inf masks inactive
 
-    def reset(self, B):
+    def reset(self, B, w0=None):
         self.t = self.t0
         a = self.P["act"][self.t0]
-        self.w = np.tile(a / a.sum(), (B, 1))  # w_{-1} = equal weight (Alg. 4)
+        self.w = np.tile(a / a.sum() if w0 is None else w0, (B, 1))  # w_{-1} = equal weight (Alg. 4)
         return self.obs()
 
     def obs(self):
@@ -141,10 +141,11 @@ def train(P, t0, t1, *, seed, env_kw, actor="flat", iters=300, B=16, epochs=10, 
     return net, env.m, env.s
 
 
-def evaluate(net, stats, P, t0, t1, env_kw):
-    """Deterministic (mean-action) rollout. Returns net-of-cost returns (T,) and weights (T, N)."""
+def evaluate(net, stats, P, t0, t1, env_kw, w0=None):
+    """Deterministic (mean-action) rollout. Returns net-of-cost returns (T,) and weights (T, N).
+    w0: previous target weights entering the state at t0 (default equal weight)."""
     env = Env(P, t0, t1, **env_kw, stats=stats)
-    o, rets, ws = env.reset(1), [], []
+    o, rets, ws = env.reset(1, w0), [], []
     while not env.done:
         with torch.no_grad():
             a = net.pi(torch.as_tensor(o, dtype=torch.float32)).double().numpy()

@@ -21,24 +21,40 @@ ETFS = list(SECTORS)
 TICKERS = [t for v in SECTORS.values() for t in v]
 SECTOR_OF = np.array([g for g, v in enumerate(SECTORS.values()) for _ in v])  # g: I -> G
 START, END = "2012-01-01", "2025-08-14"  # yfinance end is exclusive; last bar 2025-08-13
-CACHE = Path(__file__).parent / "data" / "yahoo.pkl"
+DATA = Path(__file__).parent / "data"
+CACHE = DATA / "yahoo.pkl"
 
 
-def load():
+def _cache(start):
+    return CACHE if start == START else DATA / f"yahoo_{start[:4]}.pkl"  # reproduction keeps its own file
+
+
+def load(start=START):
     """Daily adjusted close (returns), raw close (price screen), dollar volume (ADV screen)."""
-    if not CACHE.exists():
+    cache = _cache(start)
+    if not cache.exists():
         import yfinance as yf
-        df = yf.download(TICKERS + ETFS, start=START, end=END, auto_adjust=False, actions=True,
+        df = yf.download(TICKERS + ETFS, start=start, end=END, auto_adjust=False, actions=True,
                          progress=False, threads=True)
-        CACHE.parent.mkdir(exist_ok=True)
-        df.to_pickle(CACHE)
-    df = pd.read_pickle(CACHE)
+        DATA.mkdir(exist_ok=True)
+        df.to_pickle(cache)
+    df = pd.read_pickle(cache)
     adj, close, vol = df["Adj Close"], df["Close"], df["Volume"]
     # Yahoo "Close" is split-adjusted; undo later splits so the $3 screen sees the price traded that day.
     splits = df["Stock Splits"].replace(0, 1).fillna(1)
     future = splits[::-1].cumprod()[::-1].shift(-1).fillna(1)
     raw_close = close * future
     return adj, raw_close, close * vol  # split-adjusted close * split-adjusted volume = raw dollar volume
+
+
+def risk_free(index, start=START):
+    """Daily T-bill return on `index` from the 13-week bill yield (^IRX, percent p.a.), known at each close."""
+    cache = DATA / f"irx_{start[:4]}.pkl"
+    if not cache.exists():
+        import yfinance as yf
+        yf.download("^IRX", start=start, end=END, auto_adjust=False, progress=False)["Close"].to_pickle(cache)
+    y = pd.read_pickle(cache).squeeze().reindex(index).ffill().bfill() / 100
+    return (1 + y) ** (1 / 252) - 1  # earned from close d to close d+1
 
 
 def month_ends(index):

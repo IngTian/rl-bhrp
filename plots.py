@@ -84,5 +84,31 @@ def main(run="flat-global"):
     fig.savefig(d / "fig3_top15_share.png", dpi=160)
 
 
+def research():
+    """Research lane (issue #3): daily NAV and drawdown under the main protocol, from results/research/nav.npz."""
+    d = Path("results/research")
+    z = np.load(d / "nav.npz", allow_pickle=True)
+    x = pd.DatetimeIndex(z["days"])
+    rl = z["rl_wf"]
+    lines = [(rl[0], "RL-BHRP", RL), (z["bhrp"], "BHRP", BHRP), (z["bench"], "Benchmark", BENCH)]
+    for name, f, ylab, title in [
+            ("fig_research_nav.png", lambda v: v, "NAV (start = 1)", "Daily NAV, next-session fills, 5 bps on drifted holdings"),
+            ("fig_research_drawdown.png", lambda v: v / np.maximum.accumulate(np.maximum(v, 1)) - 1, "Drawdown from peak",
+             "Daily drawdown (peak includes the starting capital)")]:
+        fig, ax = plt.subplots(figsize=(7.5, 3.6))
+        band = np.array([f(v) for v in rl])
+        ax.fill_between(x, band.min(0), band.max(0), color=RL, alpha=0.15, lw=0, label="RL-BHRP, range over 20 seeds")
+        ys = [(f(v), lab, c) for v, lab, c in lines]
+        for y, lab, c in ys:
+            ax.plot(x, y, color=c, lw=1.6, label=lab + (" (seed 1001)" if c == RL else ""))
+        ax.set_ylabel(ylab)
+        ax.set_title(f"{title}", loc="left", fontsize=10)
+        ax.legend(loc="lower right" if "drawdown" in name else "upper left", fontsize=8)
+        ax.set_xlim(x[0], x[-1] + pd.Timedelta(days=200))
+        end_labels(ax, x, ys)
+        fig.tight_layout()
+        fig.savefig(d / name, dpi=160)
+
+
 if __name__ == "__main__":
-    main(*sys.argv[1:])
+    research() if sys.argv[1:] == ["research"] else main(*sys.argv[1:])

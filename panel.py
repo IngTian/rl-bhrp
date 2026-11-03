@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from bhrp import bhrp, posterior
-from data import ETFS, SECTOR_OF, TICKERS, load, month_ends, tradable
+from data import ETFS, SECTOR_OF, START, TICKERS, load, month_ends, tradable
 
 WINDOW = 756      # rolling window W_t, trading days; unstated in the paper, 756 reproduces its BHRP column
 LAGS = 3          # k lagged period returns in the state
@@ -15,11 +15,13 @@ H = 21            # trading days per period: daily moments -> monthly
 CACHE = Path(__file__).parent / "data" / "panel.npz"
 
 
-def build():
-    if CACHE.exists():
-        z = np.load(CACHE, allow_pickle=True)
+def build(start=START):
+    """start: first day of downloaded history (the reproduction uses 2012-01-01, as in the paper)."""
+    cache = CACHE if start == START else CACHE.with_name(f"panel_{start[:4]}.npz")
+    if cache.exists():
+        z = np.load(cache, allow_pickle=True)
         return {k: z[k] for k in z.files}
-    adj, raw, dv = load()
+    adj, raw, dv = load(start)
     daily = adj[TICKERS].pct_change(fill_method=None)
     ok = tradable(raw, dv)
     me = month_ends(adj.index)
@@ -52,7 +54,7 @@ def build():
     out = {k: v[first:] for k, v in out.items()}
     out["dates"] = np.array(me[first:T])           # decision dates t
     out["ret_dates"] = np.array(me[first + 1:T + 1])  # end of the period each return is realised over
-    np.savez_compressed(CACHE, **out)
+    np.savez_compressed(cache, **out)
     return out
 
 

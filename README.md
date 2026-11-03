@@ -20,6 +20,7 @@ under an explicit transaction-cost model and a risk-parity penalty.
 - [Reproducing the results](#reproducing-the-results)
 - [Implementation details](#implementation-details)
 - [Repository structure](#repository-structure)
+- [Research lane (issue #3)](#research-lane-issue-3)
 - [Citation](#citation)
 
 ## Method
@@ -250,6 +251,114 @@ These conventions were recovered by matching the paper's Benchmark column exactl
 | `plots.py` | Figures 1–3 | Figs. 1–3 |
 | `sensitivity.py` | robustness grid | — |
 | `test_bhrp.py` | checks of Prop. 3.1.8, Lemma 3.1.10, Thm. 3.1.11, App. A, eqs. 3.2.5 and 3.2.7, and Alg. 1 = risk budgeting | Sec. 3, App. A |
+| `research/` | research lane for the revision proposed in issue #3 (see below) | — |
+
+## Research lane (issue #3)
+
+[Issue #3](https://github.com/IngTian/rl-bhrp/issues/3) proposes a revised paper. This lane builds the foundation it
+asks for first: an honest evaluation protocol, competitive baselines and a chronological retraining schedule. Every
+later layer (regime beliefs, the coupled attribution verifier, MPC) will be judged on it. It is separate from the
+reproduction above: everything in [Results](#results) is unchanged and keeps the paper's conventions.
+
+**Protocol.**
+- **Execution:** decisions are taken at the month-end close and filled at the next session's close.
+- **Costs and cash:** 5 bps per dollar traded is charged on the *drifted* holdings, from a daily NAV ledger. Cash
+  earns the 13-week T-bill rate.
+- **Window and mandate:** the portfolio starts in cash on 2019-12-31 and is scored on complete months Jan 2020 – Jul
+  2025. Every method is held to the same capital mandate (10% per name, 35% per sector).
+- **RL-BHRP:** retrained by nested annual walk-forward (issue Sec. 13: inner train → validation → refit → deploy one
+  year) with seeds 1001–1020, using price history from 2009 so training starts in 2012.
+- **Metrics:** issue Sec. 15.2, including excess-of-T-bill Sharpe, RMS Sortino and a daily drawdown that counts the
+  starting capital. Inference is a paired stationary bootstrap plus a studentized Sharpe-difference test.
+
+| Method | CAGR | Excess Sharpe | Max DD (daily) | TE | Turnover/yr | Sector risk-share deviation (realized proxy) |
+|---|---:|---:|---:|---:|---:|---:|
+| Benchmark (EW sector ETFs) | 11.77% | 0.579 | 36.18% | 0.00% | 0.514 | — |
+| Asset EW | 16.56% | 0.822 | 33.55% | 4.05% | 0.810 | 0.0315 |
+| Sector EW | 14.63% | 0.720 | 35.66% | 3.13% | 0.784 | 0.0119 |
+| ERC | 14.03% | 0.730 | 33.42% | 3.94% | 0.821 | 0.0230 |
+| BHRP | 12.76% | 0.651 | 35.50% | 3.57% | 0.801 | **0.0082** |
+| HRP (López de Prado) | 11.84% | 0.634 | 32.90% | 4.87% | 2.890 | 0.0262 |
+| Min variance (LW) | 5.14% | 0.239 | 34.64% | 8.68% | 1.649 | 0.0753 |
+| Mean-variance (L2 anchor) | 17.57% | 0.819 | 31.80% | 10.54% | 2.837 | 0.0626 |
+| 12-1 momentum | 20.46% | 1.011 | 31.77% | 9.92% | 5.011 | 0.0664 |
+| RL-BHRP, v1 policy (10 seeds, one fit on 2015–2019) | 14.09% | 0.706 | 35.53% | 3.24% | 1.993 | 0.0126 |
+| RL-BHRP, walk-forward (20 seeds) | 13.21% | 0.667 | 35.41% | 3.47% | 1.647 | 0.0114 |
+
+**Correction bridge** (RL-BHRP vs BHRP, one change per step; `results/research/bridge.csv`):
+
+| Step | RL-BHRP CAGR | BHRP CAGR | CAGR gap | Sharpe gap |
+|---|---:|---:|---:|---:|
+| B0 v1.0.0 as published | 14.55% | 13.36% | +1.19 pp | +0.045 |
+| B1 + research metric definitions | 14.69% | 13.49% | +1.20 pp | +0.049 |
+| B2 + complete months only | 13.90% | 12.72% | +1.18 pp | +0.049 |
+| B3 + drift-aware daily ledger | 13.88% | 12.69% | +1.19 pp | +0.050 |
+| B4 + next-session fills | 14.09% | 12.76% | +1.33 pp | +0.055 |
+| B5a + training history from 2012 (v1 protocol unchanged) | 13.22% | 12.76% | +0.46 pp | +0.020 |
+| B5b + nested annual walk-forward (20 seeds) | 13.21% | 12.76% | +0.45 pp | +0.017 |
+
+What this shows so far:
+- **The accounting and timing corrections do not explain the RL edge.** The gap stays at about +1.2 pp through B4.
+  What shrinks it is the training data: fitting the unchanged v1 protocol on 2012–2019 instead of 2015–2019 cuts it
+  to +0.46 pp. The walk-forward then leaves it there.
+- **Under the walk-forward the edge is not distinguishable from zero.** The utility difference is +0.31 pp/yr
+  (95% CI −0.60 to +1.16, p = 0.48), and the studentized Sharpe test on the predeclared seed-1001 path gives p = 0.74.
+  Both are stable across bootstrap block lengths of 3, 6 and 12 months. The seed spread is small: CAGR ranges
+  12.97%–13.51% over 20 seeds.
+- **RL-BHRP trades 2–2.5× as much as BHRP** (1.6–2.0 vs 0.80 × NAV per year, counted on drifted holdings). At
+  50 bps per dollar traded the two are equal (12.37% vs 12.35%; `results/research/costs.csv`).
+- **Simpler allocations earn more on this universe.** Against BHRP:
+  - **Sector EW** is the clearest case. Its utility gain is +1.30 pp/yr (95% CI 0.11 to 2.47, p = 0.03), and its
+    Sharpe-difference test gives p = 0.07.
+  - **Asset EW, ERC, momentum and mean-variance** are higher but not significantly (Sharpe p = 0.19–0.59).
+  - **Min variance** is significantly worse (p = 0.03).
+  - **The v1 RL policy's** utility gain also excludes zero (+0.99 pp/yr, CI 0.11 to 1.83). But that configuration
+    was chosen with the test period visible, and the walk-forward version of the same method is null.
+  
+  The return leaders (momentum, mean-variance) are exactly what survivorship bias in a list of today's 48 large caps
+  rewards, so a point-in-time universe is required before any of these can be read as evidence.
+- **BHRP tracks the hierarchical risk mandate best.** It has the lowest sector risk-share deviation on a realized
+  covariance that no method optimizes. That fits the issue's reframing around the cost–compliance frontier rather
+  than alpha.
+
+<p align="center">
+<img src="results/research/fig_research_nav.png" width="49%">
+<img src="results/research/fig_research_drawdown.png" width="49%">
+</p>
+
+**Run it** (after the reproduction steps; the first call downloads 2009+ history and the T-bill series):
+
+```sh
+uv run python -m research.test_research      # ledger, metrics, bootstrap and baseline checks (seconds)
+uv run python -m research.walkforward        # nested walk-forward + v1 re-evaluation (~30 min, 12 processes)
+uv run python -m research.walkforward v1ext  # bridge step B5a (~5 min)
+uv run python -m research.bridge             # bridge, comparison, contrasts, cost panel (~1 min)
+uv run python plots.py research              # the two figures above
+```
+
+All tables, with every Sec. 15.2 metric and the disclosures, are in `results/research/report.md`.
+
+| file | contents | issue #3 |
+|---|---|---|
+| `research/evaluate.py` | drift-aware daily NAV ledger, metrics, mandate deviation, paired stationary bootstrap, studentized Sharpe test | Sec. 6, 15 |
+| `research/baselines.py` | EW, sector EW, ERC, BHRP, HRP, min variance, mean-variance, 12-1 momentum, mandate projection | Sec. 11.1 |
+| `research/walkforward.py` | nested annual walk-forward for RL-BHRP | Sec. 13 |
+| `research/bridge.py` | correction bridge, competitive comparison, contrasts, cost panel | Sec. 13–15 |
+| `research/test_research.py` | runnable checks | — |
+
+**Limitations and disclosures.**
+- **Retrospective.** The 756-day window, the shared actor, the penalty centering and α were fixed by the v1.0.0
+  reproduction, which had already seen 2020–2025. The walk-forward removes look-ahead only from λ and the iteration
+  count. This is the issue's "retrospective evidence", not a prospective test.
+- **Validation losses differ.** RL is tuned on v1.0.0's own validation Sharpe; mean-variance is tuned on the ledger's
+  excess Sharpe.
+- **Mandate panels.** The point-estimate panel is the covariance BHRP solves exactly, so BHRP meets it by
+  construction. The realized-proxy panel (Ledoit–Wolf on the 21 sessions after each fill) is graded identically for
+  every method. Every method breaches the ±25% band on that noisy proxy, so its breach frequency does not separate
+  them; the deviation magnitude does.
+- **Not yet done.** Point-in-time universe with delistings (needs CRSP-type data), decomposed costs, impact and
+  capacity, factor regressions, and the issue's new layers (regime-belief model, attribution verifier, MPC,
+  Dirichlet/Beta PPO).
 
 ## Citation
 
